@@ -1,0 +1,100 @@
+---
+title: "How to vizualise raster- and vectordatas in one plot"
+output: html_document
+---
+### Authors ###
+* Jelena Fleischmann
+* Florian Behnke
+* Lena Brinkmann
+* Finn Moeller
+
+### Introduction ###
+
+This is a how-to on creating a plot wich consists of a mapped rasterfile and some 
+vector points including legends for both cases. The how-to uses a Landsat.tif file for the raster and a .shp file for the vector. 
+
+### Setup ###
+At first, we need to set up our setup. that includes setting our workingdirectory
+and activate all necessary librarys. In this case it should look like the following lines.
+
+```{r, message=FALSE}
+setwd("/home/finn/1_Datenmanagement/Fogoo")
+library(sp)
+library(rgdal)
+library(raster)
+library("lattice", lib.loc="~/R/x86_64-pc-linux-gnu-library/3.2")
+library("latticeExtra", lib.loc="~/R/x86_64-pc-linux-gnu-library/3.2")
+```
+
+### Add raster and vector ###
+The second part is to add all variables we need for this task. First of all we load our rasterfile and our vector file. The vectorfile needs to be transformed to the same projections as the raster.
+
+```{r, results='hide'}
+raster <- raster("LC82100502014328LGN00_B3.tif")
+vector <- readOGR("data_2014_subset1.shp", layer = "data_2014_subset1")
+vector_utm <- spTransform(vector, CRS(projection(raster)))
+```
+
+### Define necessary variables ###
+Now we start to define our variables for our two legends, for the discrete one we need vector classes & vector colors. And for the continous legend we need to set up the min & max values, which are necessary to create the breaks. The last two commands create the values for our tics on our map.
+
+```{r}
+vector_classes <- cut(vector_utm@data$NAT, c(0,1,2,3,4,5,6,7,8,9))
+vector_colors <- colorRampPalette(brewer.pal(9,"Greens"))(9)
+
+min <- max(mean(getValues(raster)) - sd(getValues(raster)), 0)
+max <- mean(getValues(raster)) + sd(getValues(raster))
+
+breaks <- seq(min, max, length.out = 256)
+
+
+```
+
+### Create gridlines ###
+To create gridlines you have to define yat and xat as a seqence of the hole extent of the raster. The length.out term defines the number of gridlines you wish to use. Later you can use xat and yat to integrate the grindlines in the plot via the panel.abline function and to add the scale via the scale function.
+
+```{r}
+yat = seq(extent(raster)@ymin, 
+          extent(raster)@ymax, length.out = 5)
+xat = seq(extent(raster)@xmin, 
+          extent(raster)@xmax, length.out = 5)
+```
+### Create the plots ###
+
+After defining our variables we are now able to create a map for our raster file. Therefore we use the panel function, which enables us to overlay the grid lines on the our plot. 
+
+```{r}
+plt <- spplot(raster, col.regions = gray.colors(256), at = breaks,
+              key = list(space = 'left', text = list(levels(vector_classes)), 
+                         points = list(pch = 21, cex = 2, fill = vector_colors)),
+              colorkey=list(space="right"),
+              panel = function(...){
+                panel.levelplot(...)
+                panel.abline(h = yat, v = xat, col = "grey0", lwd = 0.8, lty = 3) 
+              },
+              scales = list(x = list(at = xat),
+                            y = list(at = yat)))
+```
+
+In the next step we plot the vector file, based on the natural species (=NAT) values.
+
+```{R}
+orl <- spplot(vector_utm, zcol = "NAT", col.regions = vector_colors, 
+              cuts = c(0,1,2,3,4,5,6,7,8,9))
+```
+
+
+In the end we are able to combine both layers, the raster and the vector file, with the following command.
+
+```{R}
+finalplot <- plt + as.layer(orl)
+```
+
+### Show result ###
+
+Finally we are able to plot the final result
+
+```{R, echo=FALSE}
+finalplot
+```
+
